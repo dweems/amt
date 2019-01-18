@@ -18,7 +18,6 @@
 # You should have received a copy of the GNU General Public License
 # along with cPanel Automated Migration Tool.  If not, see <http://www.gnu.org/licenses/>.
 
-#from paramiko import SSHClient, AutoAddPolicy, AuthenticationException
 from scp import SCPClient
 import getpass, os, time, paramiko, sys
 import numpy as np
@@ -31,7 +30,7 @@ class Server:
     self.password = password
     self.port = port
 
-    #establish an SSH connection
+    # attept establish an SSH connection
     try:
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
