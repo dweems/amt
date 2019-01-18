@@ -18,9 +18,9 @@
 # You should have received a copy of the GNU General Public License
 # along with cPanel Automated Migration Tool.  If not, see <http://www.gnu.org/licenses/>.
 
-from paramiko import SSHClient, AutoAddPolicy
+#from paramiko import SSHClient, AutoAddPolicy, AuthenticationException
 from scp import SCPClient
-import getpass, os, time
+import getpass, os, time, paramiko, sys
 import numpy as np
 
 class Server:
@@ -32,20 +32,25 @@ class Server:
     self.port = port
 
     #establish an SSH connection
-    self.client = SSHClient()
-    self.client.set_missing_host_key_policy(AutoAddPolicy())
-    self.client.connect(self.hostname, port=self.port, username=self.username, password=self.password)
+    try:
+        self.client = paramiko.SSHClient()
+        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.client.connect(self.hostname, port=self.port, username=self.username, password=self.password)
 
-    #gather facts for premigration check
-    self.disk_info = self.run_command("df -h | grep -w / | awk '{print $2, $3, $4}'")[2:-3].split(" ")
+        #gather facts for premigration check
+        self.disk_info = self.run_command("df -h | grep -w / | awk '{print $2, $3, $4}'")[2:-3].split(" ")
 
-    self.used_disk_space = self.disk_info[1]
-    self.avail_disk_space = self.disk_info[2]
-    self.max_disk_space = self.disk_info[0]
-    
-    self.php_version = self.run_command("php -v | grep PHP | grep -v 'Loader\|Copyright' | awk '{print $2}'")[2:-3]
-    self.php_handler = self.run_command("/usr/local/cpanel/bin/rebuild_phpconf --current | grep $(/usr/local/cpanel/bin/rebuild_phpconf --current | grep DEFAULT | awk '{print $3}') | grep -v DEFAULT | awk '{print $3}'")[2:-3]
-    self.mysql_version = self.run_command("mysql -V | awk '{print $5}' | sed 's/,//g'")[2:-3]
+        self.max_disk_space = self.disk_info[0]
+        self.used_disk_space = self.disk_info[1]
+        self.avail_disk_space = self.disk_info[2]
+        
+        self.php_version = self.run_command("php -v | grep PHP | grep -v 'Loader\|Copyright' | awk '{print $2}'")[2:-3]
+        self.php_handler = self.run_command("/usr/local/cpanel/bin/rebuild_phpconf --current | grep $(/usr/local/cpanel/bin/rebuild_phpconf --current | grep DEFAULT | awk '{print $3}') | grep -v DEFAULT | awk '{print $3}'")[2:-3]
+        self.mysql_version = self.run_command("mysql -V | awk '{print $5}' | sed 's/,//g'")[2:-3]
+
+    except Exception as e:
+        print(e)
+        sys.exit()
 
   def run_command(self, command):
       stdin, stdout, stderr = self.client.exec_command(command)
@@ -55,11 +60,16 @@ class Source(Server):
     def __init__(self, username, hostname, password, port, src_accounts):
         Server.__init__(self, username, hostname, password, port)
     
-        self.accounts = src_accounts
-        self.accounts_split = src_accounts.split(" ")
+        try:
+            self.accounts = src_accounts
+            self.accounts_split = src_accounts.split(" ")
 
-        self.packages = self.run_command("whmapi1 listpkgs | grep -Po '(?<=(name: )).*' | grep -v default | tr '\n' ','")[2:-2]
-        self.account_disk_usage = self.run_command("cd /home; du -sch {} | tail -1 | awk '{{print $1}}'".format(self.accounts))[2:-3]
+            self.packages = self.run_command("whmapi1 listpkgs | grep -Po '(?<=(name: )).*' | grep -v default | tr '\n' ','")[2:-2]
+            self.account_disk_usage = self.run_command("cd /home; du -sch {} | tail -1 | awk '{{print $1}}'".format(self.accounts))[2:-3]
+
+        except Exception as e:
+            print(e)
+            sys.exit()
 
     def isEA3(self):
         if self.run_command("httpd -v | grep 'Easy::Apache'")[2:-1] is "":
@@ -147,7 +157,7 @@ def premigration_check(src, dest):
         else:
             migration_failed("", src, dest)
 
-def migrate_server( src, dest):
+def migrate_server(src, dest):
     print("Migration in progress")
 
     # connect to source server and generate session_id
